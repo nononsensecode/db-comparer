@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/mitchellh/mapstructure"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v2"
 )
@@ -21,7 +22,6 @@ type PgxIface interface {
 	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...interface{}) pgx.Row
 	Ping(context.Context) error
-	Prepare(context.Context, string, string) (*pgconn.StatementDescription, error)
 	Acquire(ctx context.Context) (*pgxpool.Conn, error)
 	Close()
 	Stat() *pgxpool.Stat
@@ -64,16 +64,21 @@ func New(poolGetter PoolGetter, connString string) *DBComparer {
 }
 
 func (c *DBComparer) Compare(datasetFile string, orderBy, ignoreColumns map[Table][]string) (matched bool, err error) {
+	fmt.Println("comparing dataset: ", datasetFile)
 	yamlData, err := c.getYAMLData(datasetFile)
 	if err != nil {
 		return
 	}
+	fmt.Printf("yaml data: %v\n", yamlData)
 
+	fmt.Println("getting db data")
 	dbData, err := c.getDBData(yamlData, orderBy)
 	if err != nil {
 		return
 	}
+	fmt.Printf("db data: %v\n", dbData)
 
+	fmt.Println("comparing yaml and db data")
 	return c.compare(yamlData, dbData, ignoreColumns)
 }
 
@@ -89,19 +94,24 @@ func (c *DBComparer) getYAMLData(datasetFile string) (yamlData YAMLData, err err
 
 func (c *DBComparer) compare(yamlData YAMLData, dbData DBData, ignoreColumns map[Table][]string) (matched bool, err error) {
 	for tableName, yamlRowsData := range yamlData {
-		yamlRows, ok := yamlRowsData.([]map[string]interface{})
-		if !ok {
-			err = fmt.Errorf("yaml data for table %s is not a slice of maps", tableName)
+		fmt.Printf("comparing table %s\n", tableName)
+		var yamlRows []map[string]interface{}
+		err = mapstructure.Decode(yamlRowsData, &yamlRows)
+		if err != nil {
+			fmt.Printf("error decoding yaml data: %v\n", err)
 			return
 		}
+
 		dbRows := dbData[tableName]
 		if len(yamlRows) != len(dbRows) {
+			fmt.Printf("row count mismatch: %d != %d\n", len(yamlRows), len(dbRows))
 			return false, nil
 		}
 
 		ignoreCols := ignoreColumns[Table(tableName)]
 
 		for i, yamlRow := range yamlRows {
+			fmt.Printf("comparing rows yaml: %v\ndb: %v\n", yamlRow, dbRows[i])
 			dbRow := dbRows[i]
 			matched, err = c.comapreRow(yamlRow, dbRow, ignoreCols)
 			if err != nil || !matched {
@@ -129,12 +139,14 @@ func (c *DBComparer) comapreRow(yamlRow, dbRow map[string]interface{}, ignoreCol
 		}
 		if t, ok := dbRowVal.(time.Time); ok {
 			if !c.comapreTimeType(t, yamlStringVal) {
+				fmt.Printf("time type mismatch: %s != %s for field %s\n", t, yamlStringVal, colName)
 				return false, nil
 			}
 			continue
 		}
 		dbStringVal := fmt.Sprintf("%v", dbRowVal)
 		if yamlStringVal != dbStringVal {
+			fmt.Printf("value mismatch: %s != %s for field %s\n", yamlStringVal, dbStringVal, colName)
 			return false, nil
 		}
 	}
@@ -190,6 +202,9 @@ func (c *DBComparer) getDBData(yamlData YAMLData, orderBy map[Table][]string) (d
 			}
 
 			for i, fieldName := range fields {
+				/* 				if _, ok := dbData[tableName]; !ok {
+					dbData[tableName] = make([]map[string]interface{}, 0)
+				} */
 				dbData[tableName] = append(dbData[tableName], map[string]interface{}{
 					fieldName: values[i],
 				})
@@ -200,6 +215,7 @@ func (c *DBComparer) getDBData(yamlData YAMLData, orderBy map[Table][]string) (d
 }
 
 func (c *DBComparer) buildQueries(yamlData YAMLData, orderBy map[Table][]string) (queries map[Table]string) {
+	queries = make(map[Table]string)
 	for tableName := range yamlData {
 		queries[tableName] = c.buildQuery(tableName, orderBy[tableName])
 	}
