@@ -2,12 +2,14 @@ package dbcomparer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgconn"
+	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/mitchellh/mapstructure"
@@ -33,7 +35,17 @@ type Table string
 
 type YAMLData map[Table]interface{}
 
-type DBData map[Table][]map[string]interface{}
+type DBData map[Table][]map[string]FieldValue
+
+type Field struct {
+	Name string
+	Type uint32
+}
+
+type FieldValue struct {
+	Value interface{}
+	Type  uint32
+}
 
 func (y YAMLData) GetTableNames() []Table {
 	tables := make([]Table, 0, len(y))
@@ -113,7 +125,7 @@ func (c *DBComparer) compare(yamlData YAMLData, dbData DBData, ignoreColumns map
 	return true, nil
 }
 
-func (c *DBComparer) comapreRow(yamlRow, dbRow map[string]interface{}, ignoreCols []string) (matched bool, err error) {
+func (c *DBComparer) comapreRow(yamlRow map[string]interface{}, dbRow map[string]FieldValue, ignoreCols []string) (matched bool, err error) {
 	for colName, yamlVal := range yamlRow {
 		if slices.Contains(ignoreCols, colName) {
 			continue
@@ -121,23 +133,44 @@ func (c *DBComparer) comapreRow(yamlRow, dbRow map[string]interface{}, ignoreCol
 
 		yamlStringVal := fmt.Sprintf("%v", yamlVal)
 		var (
-			dbRowVal interface{}
+			dbRowVal FieldValue
 			ok       bool
 		)
 		if dbRowVal, ok = dbRow[colName]; !ok {
 			err = fmt.Errorf("column %s not found in db row", colName)
 			return
 		}
-		if t, ok := dbRowVal.(time.Time); ok {
+		if t, ok := dbRowVal.Value.(time.Time); ok {
 			if !c.comapreTimeType(t, yamlStringVal) {
 				return false, nil
 			}
 			continue
 		}
 
-		dbStringVal := fmt.Sprintf("%v", dbRowVal)
+		if dbRowVal.Type == pgtype.JSONOID {
+			yamlStringVal = strings.TrimLeft(yamlStringVal, "\t\r\n")
+			isArray := len(yamlStringVal) > 0 && yamlStringVal[0] == '['
+			if isArray {
+				var yamlArray []map[string]interface{}
+				err = json.Unmarshal([]byte(yamlStringVal), &yamlArray)
+				if err != nil {
+					return
+				}
+				yamlStringVal = fmt.Sprintf("%v", yamlArray)
+			}
+			if !isArray {
+				var yamlMap map[string]interface{}
+				err = json.Unmarshal([]byte(yamlStringVal), &yamlMap)
+				if err != nil {
+					return
+				}
+				yamlStringVal = fmt.Sprintf("%v", yamlMap)
+			}
+		}
+
+		dbStringVal := fmt.Sprintf("%v", dbRowVal.Value)
 		if yamlStringVal != dbStringVal {
-			fmt.Printf("%+T\n", dbRowVal)
+			fmt.Printf("%T\n", dbRowVal)
 			fmt.Printf("yaml: %s, db: %s\n", yamlStringVal, dbStringVal)
 			return false, nil
 		}
@@ -157,7 +190,7 @@ func (c *DBComparer) comapreTimeType(t time.Time, tAsString string) bool {
 }
 
 func (c *DBComparer) getDBData(yamlData YAMLData, orderBy map[Table][]string) (dbData DBData, err error) {
-	dbData = make(map[Table][]map[string]interface{})
+	dbData = make(map[Table][]map[string]FieldValue)
 
 	ctx := context.Background()
 
@@ -177,13 +210,13 @@ func (c *DBComparer) getDBData(yamlData YAMLData, orderBy map[Table][]string) (d
 		defer rows.Close()
 
 		start := true
-		var fields []string
+		var fields []Field
 		for rows.Next() {
 			if start {
 				start = false
 				fieldDescs := rows.FieldDescriptions()
 				for _, fieldDesc := range fieldDescs {
-					fields = append(fields, string(fieldDesc.Name))
+					fields = append(fields, Field{string(fieldDesc.Name), fieldDesc.DataTypeOID})
 				}
 			}
 
@@ -193,9 +226,9 @@ func (c *DBComparer) getDBData(yamlData YAMLData, orderBy map[Table][]string) (d
 				return
 			}
 
-			rowData := make(map[string]interface{})
-			for i, fieldName := range fields {
-				rowData[fieldName] = values[i]
+			rowData := make(map[string]FieldValue)
+			for i, field := range fields {
+				rowData[field.Name] = FieldValue{values[i], field.Type}
 			}
 			dbData[tableName] = append(dbData[tableName], rowData)
 		}
