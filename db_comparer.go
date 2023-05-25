@@ -64,21 +64,16 @@ func New(poolGetter PoolGetter, connString string) *DBComparer {
 }
 
 func (c *DBComparer) Compare(datasetFile string, orderBy, ignoreColumns map[Table][]string) (matched bool, err error) {
-	fmt.Println("comparing dataset: ", datasetFile)
 	yamlData, err := c.getYAMLData(datasetFile)
 	if err != nil {
 		return
 	}
-	fmt.Printf("yaml data: %v\n", yamlData)
 
-	fmt.Println("getting db data")
 	dbData, err := c.getDBData(yamlData, orderBy)
 	if err != nil {
 		return
 	}
-	fmt.Printf("db data: %v\n", dbData)
 
-	fmt.Println("comparing yaml and db data")
 	return c.compare(yamlData, dbData, ignoreColumns)
 }
 
@@ -94,24 +89,20 @@ func (c *DBComparer) getYAMLData(datasetFile string) (yamlData YAMLData, err err
 
 func (c *DBComparer) compare(yamlData YAMLData, dbData DBData, ignoreColumns map[Table][]string) (matched bool, err error) {
 	for tableName, yamlRowsData := range yamlData {
-		fmt.Printf("comparing table %s\n", tableName)
 		var yamlRows []map[string]interface{}
 		err = mapstructure.Decode(yamlRowsData, &yamlRows)
 		if err != nil {
-			fmt.Printf("error decoding yaml data: %v\n", err)
 			return
 		}
 
 		dbRows := dbData[tableName]
 		if len(yamlRows) != len(dbRows) {
-			fmt.Printf("row count mismatch: %d != %d\n", len(yamlRows), len(dbRows))
 			return false, nil
 		}
 
 		ignoreCols := ignoreColumns[Table(tableName)]
 
 		for i, yamlRow := range yamlRows {
-			fmt.Printf("comparing rows yaml: %v\ndb: %v\n", yamlRow, dbRows[i])
 			dbRow := dbRows[i]
 			matched, err = c.comapreRow(yamlRow, dbRow, ignoreCols)
 			if err != nil || !matched {
@@ -139,18 +130,19 @@ func (c *DBComparer) comapreRow(yamlRow, dbRow map[string]interface{}, ignoreCol
 		}
 		if t, ok := dbRowVal.(time.Time); ok {
 			if !c.comapreTimeType(t, yamlStringVal) {
-				fmt.Printf("time type mismatch: %s != %s for field %s\n", t, yamlStringVal, colName)
 				return false, nil
 			}
 			continue
 		}
+
 		dbStringVal := fmt.Sprintf("%v", dbRowVal)
 		if yamlStringVal != dbStringVal {
-			fmt.Printf("value mismatch: %s != %s for field %s\n", yamlStringVal, dbStringVal, colName)
+			fmt.Printf("%+T\n", dbRowVal)
+			fmt.Printf("yaml: %s, db: %s\n", yamlStringVal, dbStringVal)
 			return false, nil
 		}
 	}
-	return
+	return true, nil
 }
 
 func (c *DBComparer) comapreTimeType(t time.Time, tAsString string) bool {
@@ -201,14 +193,11 @@ func (c *DBComparer) getDBData(yamlData YAMLData, orderBy map[Table][]string) (d
 				return
 			}
 
+			rowData := make(map[string]interface{})
 			for i, fieldName := range fields {
-				/* 				if _, ok := dbData[tableName]; !ok {
-					dbData[tableName] = make([]map[string]interface{}, 0)
-				} */
-				dbData[tableName] = append(dbData[tableName], map[string]interface{}{
-					fieldName: values[i],
-				})
+				rowData[fieldName] = values[i]
 			}
+			dbData[tableName] = append(dbData[tableName], rowData)
 		}
 	}
 	return

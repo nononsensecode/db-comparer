@@ -3,7 +3,11 @@ employee:
     name: John
     age: 30
     joined: 2019-01-01 00:00:00
+    details: >
+      {"address": "123 Main St","city": "New York","state": "NY","zip": "10001"}
   - id: 2
     name: Jane
     age: 25
     joined: 2019-02-01 00:00:00
+    details: >
+      {"address": "456 Main St","city": "New York","state": "NY","zip": "10001"}

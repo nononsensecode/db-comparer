@@ -52,7 +52,6 @@ func (s *IntegrationTestSuite) SetupSuite() {
 			"listen_addresses = '*'",
 		},
 	}, func(config *docker.HostConfig) {
-		// set AutoRemove to true so that stopped container goes away by itself
 		config.AutoRemove = true
 		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
 	})
@@ -66,9 +65,8 @@ func (s *IntegrationTestSuite) SetupSuite() {
 
 	log.Println("Connecting to database on url: ", s.PgDbURL)
 
-	s.DockerResource.Expire(120) // Tell docker to hard kill the container in 120 seconds
+	s.DockerResource.Expire(120)
 
-	// exponential backoff-retry, because the application in the container might not be ready to accept connections yet
 	s.DockerPool.MaxWait = 120 * time.Second
 	if err = s.DockerPool.Retry(func() error {
 		ctx := context.Background()
