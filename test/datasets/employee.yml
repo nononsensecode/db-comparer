@@ -7,6 +7,8 @@ employee:
       {"address": "123 Main St","city": "New York","state": "NY","zip": "10001"}
     positions: >
       [{"title": "Manager","department": "Sales","salary": 100000},{"title": "Associate","department": "Sales","salary": 50000}]
+    family: >
+      [{"spouse": {"name": "Jane","age": 25},"children": [{"name": "Sally","age": 5},{"name": "Mike","age": 3}]}]
   - id: 2
     name: Jane
     age: 25
@@ -15,3 +17,5 @@ employee:
       {"address": "456 Main St","city": "New York","state": "NY","zip": "10001"}
     positions: >
       [{"title": "Associate","department": "Sales","salary": 50000}]
+    family: >
+      [{"spouse": {"name": "John","age": 30},"children": [{"name": "Sally","age": 5},{"name": "Mike","age": 3}]}]

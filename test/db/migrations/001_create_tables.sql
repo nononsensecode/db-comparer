@@ -4,7 +4,8 @@ CREATE TABLE employee (
     age INTEGER NOT NULL,
     joined TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     details JSON NOT NULL,
-    positions JSON NOT NULL
+    positions JSON NOT NULL,
+    family JSON NOT NULL
 );
 
 ---- create above / drop below ----
