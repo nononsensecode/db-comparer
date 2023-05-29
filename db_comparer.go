@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/mitchellh/mapstructure"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v2"
 )
@@ -110,7 +109,8 @@ func (c *DBComparer) compare(yamlData YAMLData, dbData DBData, ignoreColumns map
 
 		dbRows := dbData[tableName]
 		if len(yamlRows) != len(dbRows) {
-			return false, nil
+			err = fmt.Errorf("expected %d rows in table %s, actual %d", len(yamlRows), tableName, len(dbRows))
+			return false, err
 		}
 
 		ignoreCols := ignoreColumns[Table(tableName)]
@@ -118,9 +118,10 @@ func (c *DBComparer) compare(yamlData YAMLData, dbData DBData, ignoreColumns map
 		for i, yamlRow := range yamlRows {
 			dbRow := dbRows[i]
 			matched, err = c.comapreRow(yamlRow, dbRow, ignoreCols)
-			if err != nil || !matched {
-				return
+			if matched {
+				continue
 			}
+			return
 		}
 	}
 	return true, nil
@@ -143,7 +144,8 @@ func (c *DBComparer) comapreRow(yamlRow map[string]interface{}, dbRow map[string
 		}
 		if t, ok := dbRowVal.Value.(time.Time); ok {
 			if !c.comapreTimeType(t, yamlStringVal) {
-				return false, nil
+				err = fmt.Errorf("for column %s, expected in db: %s, actual in db: %s", colName, yamlStringVal, t)
+				return false, err
 			}
 			continue
 		}
@@ -185,8 +187,8 @@ func (c *DBComparer) comapreRow(yamlRow map[string]interface{}, dbRow map[string
 
 		dbStringVal := fmt.Sprintf("%v", dbRowVal.Value)
 		if yamlStringVal != dbStringVal {
-			logrus.Errorf("expected in db: %s, actual in db: %s", yamlStringVal, dbStringVal)
-			return false, nil
+			err = fmt.Errorf("for column %s, expected in db: %s, actual in db: %s", colName, yamlStringVal, dbStringVal)
+			return false, err
 		}
 	}
 	return true, nil
