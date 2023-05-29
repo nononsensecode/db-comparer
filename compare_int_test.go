@@ -6,7 +6,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jackc/tern/migrate"
-	comparer "nononsensecode.com/db-comparer"
+	comparer "nononsensecode.dev/db-comparer"
 )
 
 func (s *IntegrationTestSuite) TestCompare() {

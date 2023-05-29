@@ -1,4 +1,4 @@
-module nononsensecode.com/db-comparer
+module nononsensecode.dev/db-comparer
 
 go 1.19
 
