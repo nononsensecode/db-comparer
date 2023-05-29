@@ -168,9 +168,22 @@ func (c *DBComparer) comapreRow(yamlRow map[string]interface{}, dbRow map[string
 			}
 		}
 
+		if dbRowVal.Type == pgtype.UUIDOID {
+			pgtypeuuid := pgtype.UUID{}
+			err = pgtypeuuid.Set(yamlStringVal)
+			if err != nil {
+				return
+			}
+			var stringUUID string
+			err = pgtypeuuid.AssignTo(&stringUUID)
+			if err != nil {
+				return
+			}
+			dbRowVal.Value = stringUUID
+		}
+
 		dbStringVal := fmt.Sprintf("%v", dbRowVal.Value)
 		if yamlStringVal != dbStringVal {
-			fmt.Printf("%T\n", dbRowVal)
 			fmt.Printf("yaml: %s, db: %s\n", yamlStringVal, dbStringVal)
 			return false, nil
 		}

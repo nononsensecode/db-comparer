@@ -5,7 +5,8 @@ CREATE TABLE employee (
     joined TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     details JSON NOT NULL,
     positions JSON NOT NULL,
-    family JSON NOT NULL
+    family JSON NOT NULL,
+    emp_id uuid NOT NULL
 );
 
 ---- create above / drop below ----
