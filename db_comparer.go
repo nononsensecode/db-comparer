@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/mitchellh/mapstructure"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v2"
 )
@@ -184,7 +185,7 @@ func (c *DBComparer) comapreRow(yamlRow map[string]interface{}, dbRow map[string
 
 		dbStringVal := fmt.Sprintf("%v", dbRowVal.Value)
 		if yamlStringVal != dbStringVal {
-			fmt.Printf("yaml: %s, db: %s\n", yamlStringVal, dbStringVal)
+			logrus.Errorf("expected in db: %s, actual in db: %s", yamlStringVal, dbStringVal)
 			return false, nil
 		}
 	}
